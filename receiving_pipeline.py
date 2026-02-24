@@ -32,9 +32,8 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
-from PIL import Image
 import pytesseract
-
+from PIL import Image
 
 ###############################
 # CONFIG
