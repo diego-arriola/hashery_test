@@ -73,7 +73,7 @@ hashery-receiving/
 - Verify the file appears in GCS Browser console.
 - Download the file to confirm upload/download permissions work.
 
-**Screenshot to capture:** GCS bucket browser showing folder structure with test file uploaded.
+![alt text](gcp-folder-structure-screanshot.png)
 
 ---
 

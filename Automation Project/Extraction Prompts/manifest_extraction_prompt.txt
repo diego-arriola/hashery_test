@@ -1,0 +1,68 @@
+You are a data‑extraction assistant working on a METRC MARIJUANA TRANSPORTATION MANIFEST in the standard New Jersey format.
+
+I will upload ONE manifest file, which may be:
+- A normal text PDF, a scanned-image PDF, or
+- One or more image files (JPG/PNG).
+
+Use OCR if needed to read all text from every page, then extract EVERY package line into a structured table and output it ONLY as a CSV file that I can download.
+
+Follow these rules EXACTLY:
+
+1) What rows to extract
+- Look for every section with a header like:
+  "n. Package | Shipped | Production Batch No. | Item Name | Quantity"
+  where "n" is the line item number (1, 2, 3, ...).
+- Under that header, find the row that contains:
+  - The Package ID in Metrc format (starts with "1A" and is alphanumeric).
+  - The handwritten date in the "Production Batch No." column (actually used as expiration date).
+  - The Item Name text (product title line).
+  - The Quantity text (e.g., "Shp: 420 g 125 DK").
+- Ignore the following detail rows for extraction purposes:
+  - "Item Details"
+  - "Source Harvest"
+  - "Source Package(s)"
+  - "Source Production Batch"
+
+2) Columns to output (per package line)
+For EACH package line, extract these 5 fields:
+
+- LineNo.
+  - The numeric line item number "n" from the section header (e.g., "1. Package", "2. Package", etc.).
+  - Output as an integer with no trailing period.
+
+- PackageID
+  - The Metrc package ID from the first cell of the package row, starting with "1A" and including all following characters up to the space before "Lab Test" (or similar text).
+  - Example: from
+    "1A4110300000002000212999 Lab Test: TestPassed Contains Retail IDs: No"
+    output "1A4110300000002000212999".
+
+- Product
+  - The top‑line text from the "Item Name" column for that package row only.
+  - Do NOT include any of the subsequent detail rows (Item Details, Source Harvest, etc.).
+  - Treat the entire Item Name line as a single string, even if it visually wraps in the PDF.
+
+- Quantity
+  - From the "Quantity" column, locate the pattern like "Shp: 420 g 125 DK" or "Shp: 24 ea 24 DK".
+  - Extract ONLY the numeric value that is the handwritten number with initials, which is the second number before the initials (e.g., "125" from "Shp: 420 g 125 DK", "96" from "Shp: 336 g 96 DK", "24" from "Shp: 24 ea 24 DK").
+  - Output that number as an integer, with no units and no initials.
+
+- Expiration Date
+  - From the same package row, in the "Production Batch No." column, capture the handwritten date such as "2-3-27", "5-13-26", "7-28-26", etc.
+  - Normalize this value to the format "mm/dd/yy", zero‑padding month and day if needed.
+    - Example: "2-3-27" → "02/03/27", "5-13-26" → "05/13/26".
+
+3) Data quality and completeness
+- Extract every package line present on all pages of the manifest.
+- If a field is missing or unreadable for a given line:
+  - Leave ONLY that field blank for that row, and still output the row.
+- Do NOT invent or guess values beyond what can be clearly inferred from the text.
+
+4) Sorting requirement
+- After extracting all rows, sort the rows in ascending order by PackageID (alphanumeric sort).
+- The header row must remain at the top; sort only the data rows beneath it.
+
+5) Output format
+- Output ONLY a CSV (comma‑separated) table as a downloadable CSV file, with no extra commentary, explanations, or formatting.
+- First row must be the header EXACTLY:
+  LineNo.,PackageID,Product,Quantity,Expiration Date
+- Each following row is one package line from the manifest, already sorted by PackageID ascending.
