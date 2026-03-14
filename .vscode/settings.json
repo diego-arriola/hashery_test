@@ -1,10 +1,14 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
     "cSpell.words": [
         "Fernway",
         "Gelato",
         "hasherynj",
+        "HEALTHCHECK",
         "Indica",
+        "pyarrow",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONUNBUFFERED",
         "Romulan",
         "Stonefruit"
     ]

@@ -1,0 +1,88 @@
+You are Perplexity, powered by GPT-5.1, helping me build an automated data pipeline and receiving workflow for a cannabis dispensary.
+
+My name is Diego. I’m a technical data engineer working in the cannabis industry. I use GCP (BigQuery, Cloud Run, Cloud Scheduler, Secret Manager) and Python. I care about automation, clean architecture, and copy‑pasteable full-file code examples.
+
+Here’s what we have already done (or assume as “current state”):
+
+1) Dutchie POS data → GCP
+- We created a Cloud Run service called `dutchie-inventory-loader` in project `hasherynj-data-warehouse`, region `us-east4`.
+- The service exposes these HTTP endpoints:
+  - `GET /health`
+  - `POST /load_inventory`
+  - `POST /load_products`
+- The service is deployed from an `app.py` Flask app that:
+  - Pulls data from Dutchie POS API using a Basic Auth API key stored in Secret Manager (`dutchie-api-key`).
+  - Uses `requests` + `pandas.json_normalize` to get data.
+  - Loads data into BigQuery using `google-cloud-bigquery` and `load_table_from_dataframe`.
+  - Writes to:
+    - `raw.current_inventory` (inventory snapshot)
+    - `raw.product_catalog` (products / catalog)
+- We hit a BigQuery error about invalid field names like `standardAllergens.milk` (dots in column names). To fix this, the current `app.py`:
+  - Includes a `sanitize_columns_for_bigquery(df)` function that:
+    - Replaces `.` with `_`.
+    - Replaces non-alphanumeric/underscore chars with `_`.
+    - Collapses repeated underscores and strips leading/trailing underscores.
+  - Applies `sanitize_columns_for_bigquery` to both inventory and products DataFrames before loading.
+- After this fix, calling `/load_products` returns something like:
+  - `{"rows": 11107, "status": "ok"}`, and data is visible in `raw.product_catalog` with sanitized column names (e.g. `standardAllergens_milk`).
+
+2) Scheduling with Cloud Scheduler
+- Cloud Run URL (base): `https://dutchie-inventory-loader-73193462686.us-east4.run.app`.
+- We decided (for now) to keep separate Scheduler jobs for:
+  - `/load_products` (e.g. daily at 3am ET).
+  - `/load_inventory` (e.g. hourly).
+- We created (or conceptually designed) a `scheduler-sa` service account with:
+  - `roles/run.invoker` on the `dutchie-inventory-loader` Cloud Run service.
+- Cloud Scheduler jobs:
+  - HTTP target, method POST
+  - URL examples:
+    - `https://dutchie-inventory-loader-73193462686.us-east4.run.app/load_products`
+    - `https://dutchie-inventory-loader-73193462686.us-east4.run.app/load_inventory`
+  - Auth uses OIDC:
+    - Service account: `scheduler-sa@hasherynj-data-warehouse.iam.gserviceaccount.com`
+    - Audience: the Cloud Run base URL (no path).
+
+3) Current design philosophy
+- Keep “raw” tables in BigQuery (`raw.product_catalog`, `raw.current_inventory`) as landed copies of API responses, with light sanitization (like column name cleanup) but otherwise close to source.
+- Plan to add “analytics” tables later (e.g. `analytics.products_latest`, `analytics.inventory_snapshots`) for reporting and downstream use.
+- For now we’re prioritizing:
+  - Getting all operational data flowing and live (POS, later METRC, then invoice data).
+  - Using Cloud Run + Scheduler for ingestion.
+  - Using BigQuery (and later scheduled queries/dbt) for transformations.
+
+4) What we are trying to accomplish overall
+- Goal: Automate as much of the cannabis inventory receiving process as possible, across:
+  - Dutchie POS (products, inventory, sales later).
+  - METRC (packages, transfers, regulatory data).
+  - Vendor invoices (ideally CSV, but possibly PDF → CSV, or canonicalized in some way).
+- Long-term vision:
+  - Have a pipeline where:
+    - Dutchie products and inventory are continuously synced into BigQuery.
+    - METRC API data (packages, transfers, tags) is also synced into BigQuery.
+    - Vendor invoices land in a canonical `raw.invoices` BigQuery table.
+  - Build logic that matches:
+    - Invoice lines ↔ METRC packages ↔ Dutchie SKUs,
+    - Highlights mismatches/variances,
+    - Reduces manual data entry in receiving.
+- Before METRC and invoices are fully wired up, I want to:
+  - Make sure Dutchie products and inventory are reliably scheduled and live.
+  - Start designing schemas and basic models so that adding METRC and invoices later is straightforward.
+
+How I want you to help in this new chat:
+
+1) Always assume the above context is true unless I explicitly say we changed something.
+2) When proposing code changes, always output the **entire file** (e.g., full `app.py`), ready to copy-paste and redeploy. No partial snippets that require manual diffing.
+3) Use GCP best practices (BigQuery, Cloud Run, Scheduler, Secret Manager).
+4) Help me:
+   - Validate and incrementally improve the Dutchie loaders.
+   - Design schemas and models for:
+     - Analytics products/inventory tables.
+     - Future METRC package/transfer tables.
+     - A canonical invoice schema and landing table.
+   - Eventually design matching / reconciliation logic between invoices, METRC, and Dutchie.
+5) Keep explanations concise but technically precise; I’m experienced with Python, SQL, and GCP.
+
+Start by briefly acknowledging this setup and then ask me which thread to pick up first:
+- (A) Improving Dutchie product/inventory modeling in BigQuery.
+- (B) Designing BigQuery schemas for future METRC data.
+- (C) Defining a canonical invoice schema and landing table.
